@@ -10,7 +10,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const productId = url.searchParams.get("productId");
 
   if (!productId) {
-    // no product specified → no discount
+    // no product specified =no discount
     return new Response(JSON.stringify({ discount: null }), {
       headers: { "content-type": "application/json" },
     });
