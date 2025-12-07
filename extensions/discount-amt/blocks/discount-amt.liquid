@@ -1,0 +1,61 @@
+{%- comment -%}
+  Discount badge block for product page.
+{%- endcomment -%}
+
+{%- assign app_base_url = "https://aruba-integration-cleaners-compliant.trycloudflare.com" -%}
+
+<div
+  class="discount-app-badge-block"
+  data-product-gid="{{ product.admin_graphql_api_id }}"
+  data-app-base-url="{{ app_base_url }}"
+>
+  <div id="discount-app-badge-text"></div>
+</div>
+
+<script>
+  (function () {
+    var script = document.currentScript;
+    var wrapper = script.closest(".discount-app-badge-block");
+    if (!wrapper) return;
+
+    var productGid = wrapper.dataset.productGid;
+    var appBaseUrl = wrapper.dataset.appBaseUrl;
+
+    if (!productGid || !appBaseUrl) return;
+
+    var target = wrapper.querySelector("#discount-app-badge-text");
+    if (!target) return;
+
+    fetch(
+      appBaseUrl +
+        "/api/product-discount?productId=" +
+        encodeURIComponent(productGid)
+    )
+      .then(function (res) {
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data || !data.discount) return;
+
+        var d = data.discount;
+
+        target.innerHTML =
+          '<span style="display:inline-block;padding:4px 8px;border-radius:4px;background:black;color:white;font-size:13px;">' +
+          d.percentage +
+          "% OFF - " +
+          d.title +
+          "</span>";
+      })
+      .catch(function (err) {
+        console.error("Error loading discount", err);
+      });
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Discount badge (app)",
+  "target": "section",
+  "settings": []
+}
+{% endschema %}

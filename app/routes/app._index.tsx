@@ -1,254 +1,330 @@
-import { useEffect } from "react";
+// simple admin page to create + list product discounts
+// with a basic product picker (dropdown) using Admin GraphQL
+
 import type {
+  LoaderFunctionArgs,
   ActionFunctionArgs,
   HeadersFunction,
-  LoaderFunctionArgs,
 } from "react-router";
-import { useFetcher } from "react-router";
-import { useAppBridge } from "@shopify/app-bridge-react";
-import { authenticate } from "../shopify.server";
+import { useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
+import { authenticate } from "../shopify.server";
+import {
+  createProductDiscount,
+  listProductDiscounts,
+} from "../models/discount.server";
 
-  return null;
-};
-
-export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin } = await authenticate.admin(request);
-  const color = ["Red", "Orange", "Yellow", "Green"][
-    Math.floor(Math.random() * 4)
-  ];
-  const response = await admin.graphql(
-    `#graphql
-      mutation populateProduct($product: ProductCreateInput!) {
-        productCreate(product: $product) {
-          product {
-            id
-            title
-            handle
-            status
-            variants(first: 10) {
-              edges {
-                node {
-                  id
-                  price
-                  barcode
-                  createdAt
-                }
-              }
-            }
-          }
-        }
-      }`,
-    {
-      variables: {
-        product: {
-          title: `${color} Snowboard`,
-        },
-      },
-    },
-  );
-  const responseJson = await response.json();
-
-  const product = responseJson.data!.productCreate!.product!;
-  const variantId = product.variants.edges[0]!.node!.id!;
-
-  const variantResponse = await admin.graphql(
-    `#graphql
-    mutation shopifyReactRouterTemplateUpdateVariant($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
-      productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-        productVariants {
+const PRODUCTS_QUERY = `#graphql
+  query DiscountAdminProducts {
+    products(first: 20) {
+      edges {
+        node {
           id
-          price
-          barcode
-          createdAt
+          title
         }
       }
-    }`,
-    {
-      variables: {
-        productId: product.id,
-        variants: [{ id: variantId, price: "100.00" }],
-      },
-    },
-  );
+    }
+  }
+`;
 
-  const variantResponseJson = await variantResponse.json();
-
-  return {
-    product: responseJson!.data!.productCreate!.product,
-    variant:
-      variantResponseJson!.data!.productVariantsBulkUpdate!.productVariants,
-  };
+type LoaderData = {
+  discounts: Awaited<ReturnType<typeof listProductDiscounts>>;
+  products: { id: string; title: string }[];
 };
 
-export default function Index() {
-  const fetcher = useFetcher<typeof action>();
+// runs on server when page loads
+export async function loader({ request }: LoaderFunctionArgs) {
+  const { session, admin } = await authenticate.admin(request);
+  const shop = session.shop;
 
-  const shopify = useAppBridge();
-  const isLoading =
-    ["loading", "submitting"].includes(fetcher.state) &&
-    fetcher.formMethod === "POST";
+  // load some products for the picker (like QR demo)
+  const productsResponse = await admin.graphql(PRODUCTS_QUERY);
+  const productsJson = await productsResponse.json();
 
-  useEffect(() => {
-    if (fetcher.data?.product?.id) {
-      shopify.toast.show("Product created");
-    }
-  }, [fetcher.data?.product?.id, shopify]);
+  const products =
+    productsJson.data?.products?.edges?.map((edge: any) => edge.node) ?? [];
 
-  const generateProduct = () => fetcher.submit({}, { method: "POST" });
+  const discounts = await listProductDiscounts(shop);
+
+  const data: LoaderData = {
+    discounts,
+    products,
+  };
+
+  return data;
+}
+
+// runs when the form sends POST request
+export async function action({ request }: ActionFunctionArgs) {
+  const { session } = await authenticate.admin(request);
+  const shop = session.shop;
+
+  const formData = await request.formData();
+
+  const title = String(formData.get("title") || "");
+  const percentage = Number(formData.get("percentage") || 0);
+  const productId = String(formData.get("productId") || "");
+
+  await createProductDiscount({
+    shop,
+    title,
+    percentage,
+    productId,
+  });
+
+  // basic redirect back to this page
+  return new Response(null, {
+    status: 302,
+    headers: { Location: "/app/discounts" },
+  });
+}
+
+// React part + HTML form (what admin sees)
+export default function DiscountsIndex() {
+  const { discounts, products } = useLoaderData() as LoaderData;
+
+  const hasProducts = products.length > 0;
 
   return (
-    <s-page heading="Shopify app template">
-      <s-button slot="primary-action" onClick={generateProduct}>
-        Generate a product
-      </s-button>
+    <main style={{ padding: "24px", maxWidth: "900px", margin: "0 auto" }}>
+      <h1
+        style={{
+          fontSize: "20px",
+          fontWeight: 600,
+          marginBottom: "16px",
+        }}
+      >
+        Product discounts (demo)
+      </h1>
 
-      <s-section heading="Congrats on creating a new Shopify app 🎉">
-        <s-paragraph>
-          This embedded app template uses{" "}
-          <s-link
-            href="https://shopify.dev/docs/apps/tools/app-bridge"
-            target="_blank"
-          >
-            App Bridge
-          </s-link>{" "}
-          interface examples like an{" "}
-          <s-link href="/app/additional">additional page in the app nav</s-link>
-          , as well as an{" "}
-          <s-link
-            href="https://shopify.dev/docs/api/admin-graphql"
-            target="_blank"
-          >
-            Admin GraphQL
-          </s-link>{" "}
-          mutation demo, to provide a starting point for app development.
-        </s-paragraph>
-      </s-section>
-      <s-section heading="Get started with products">
-        <s-paragraph>
-          Generate a product with GraphQL and get the JSON output for that
-          product. Learn more about the{" "}
-          <s-link
-            href="https://shopify.dev/docs/api/admin-graphql/latest/mutations/productCreate"
-            target="_blank"
-          >
-            productCreate
-          </s-link>{" "}
-          mutation in our API references.
-        </s-paragraph>
-        <s-stack direction="inline" gap="base">
-          <s-button
-            onClick={generateProduct}
-            {...(isLoading ? { loading: true } : {})}
-          >
-            Generate a product
-          </s-button>
-          {fetcher.data?.product && (
-            <s-button
-              onClick={() => {
-                shopify.intents.invoke?.("edit:shopify/Product", {
-                  value: fetcher.data?.product?.id,
-                });
-              }}
-              target="_blank"
-              variant="tertiary"
-            >
-              Edit product
-            </s-button>
-          )}
-        </s-stack>
-        {fetcher.data?.product && (
-          <s-section heading="productCreate mutation">
-            <s-stack direction="block" gap="base">
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
-              >
-                <pre style={{ margin: 0 }}>
-                  <code>{JSON.stringify(fetcher.data.product, null, 2)}</code>
-                </pre>
-              </s-box>
+      {/* create form */}
+      <section
+        style={{
+          marginBottom: "24px",
+          padding: "16px",
+          borderRadius: "8px",
+          border: "1px solid #e5e7eb",
+          backgroundColor: "#ffffff",
+        }}
+      >
+        <h2
+          style={{
+            fontSize: "16px",
+            fontWeight: 500,
+            marginBottom: "12px",
+          }}
+        >
+          Create discount
+        </h2>
 
-              <s-heading>productVariantsBulkUpdate mutation</s-heading>
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
-              >
-                <pre style={{ margin: 0 }}>
-                  <code>{JSON.stringify(fetcher.data.variant, null, 2)}</code>
-                </pre>
-              </s-box>
-            </s-stack>
-          </s-section>
+        {!hasProducts && (
+          <p
+            style={{
+              fontSize: "14px",
+              color: "#6b7280",
+              marginBottom: "12px",
+            }}
+          >
+            This store doesn&apos;t have any products yet. Create a product
+            first, then you can attach a discount to it.
+          </p>
         )}
-      </s-section>
 
-      <s-section slot="aside" heading="App template specs">
-        <s-paragraph>
-          <s-text>Framework: </s-text>
-          <s-link href="https://reactrouter.com/" target="_blank">
-            React Router
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>Interface: </s-text>
-          <s-link
-            href="https://shopify.dev/docs/api/app-home/using-polaris-components"
-            target="_blank"
-          >
-            Polaris web components
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>API: </s-text>
-          <s-link
-            href="https://shopify.dev/docs/api/admin-graphql"
-            target="_blank"
-          >
-            GraphQL
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>Database: </s-text>
-          <s-link href="https://www.prisma.io/" target="_blank">
-            Prisma
-          </s-link>
-        </s-paragraph>
-      </s-section>
+        <form method="post">
+          <div style={{ marginBottom: "12px" }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "4px",
+                fontSize: "14px",
+                fontWeight: 500,
+              }}
+            >
+              Title
+            </label>
+            <input
+              name="title"
+              placeholder="Winter sale 10% off"
+              style={{
+                width: "100%",
+                padding: "8px",
+                fontSize: "14px",
+                borderRadius: "4px",
+                border: "1px solid #d1d5db",
+              }}
+            />
+          </div>
 
-      <s-section slot="aside" heading="Next steps">
-        <s-unordered-list>
-          <s-list-item>
-            Build an{" "}
-            <s-link
-              href="https://shopify.dev/docs/apps/getting-started/build-app-example"
-              target="_blank"
+          <div style={{ marginBottom: "12px" }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "4px",
+                fontSize: "14px",
+                fontWeight: 500,
+              }}
             >
-              example app
-            </s-link>
-          </s-list-item>
-          <s-list-item>
-            Explore Shopify&apos;s API with{" "}
-            <s-link
-              href="https://shopify.dev/docs/apps/tools/graphiql-admin-api"
-              target="_blank"
+              Percentage (%)
+            </label>
+            <input
+              name="percentage"
+              type="number"
+              min={1}
+              max={100}
+              placeholder="10"
+              style={{
+                width: "100%",
+                padding: "8px",
+                fontSize: "14px",
+                borderRadius: "4px",
+                border: "1px solid #d1d5db",
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: "12px" }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "4px",
+                fontSize: "14px",
+                fontWeight: 500,
+              }}
             >
-              GraphiQL
-            </s-link>
-          </s-list-item>
-        </s-unordered-list>
-      </s-section>
-    </s-page>
+              Product
+            </label>
+
+            <select
+              name="productId"
+              style={{
+                width: "100%",
+                padding: "8px",
+                fontSize: "14px",
+                borderRadius: "4px",
+                border: "1px solid #d1d5db",
+                backgroundColor: hasProducts ? "#ffffff" : "#f9fafb",
+              }}
+              defaultValue=""
+              disabled={!hasProducts}
+            >
+              <option value="" disabled>
+                {hasProducts ? "Select a product..." : "No products available"}
+              </option>
+
+              {products.map((product) => (
+                <option key={product.id} value={product.id}>
+                  {product.title}
+                </option>
+              ))}
+            </select>
+
+            <p
+              style={{
+                fontSize: "12px",
+                color: "#6b7280",
+                marginTop: "4px",
+              }}
+            >
+              This works like the QR demo product picker: it uses the
+              product&apos;s GraphQL ID under the hood, but you don&apos;t need
+              to paste the GID manually.
+            </p>
+          </div>
+
+          <button
+            type="submit"
+            style={{
+              marginTop: "8px",
+              padding: "8px 14px",
+              borderRadius: "6px",
+              border: "none",
+              backgroundColor: "#111827",
+              color: "white",
+              cursor: "pointer",
+              fontSize: "14px",
+            }}
+          >
+            Save discount
+          </button>
+        </form>
+      </section>
+
+      {/* list existing discounts */}
+      <section>
+        <h2
+          style={{
+            fontSize: "16px",
+            fontWeight: 500,
+            marginBottom: "8px",
+          }}
+        >
+          Existing discounts
+        </h2>
+
+        {(!discounts || discounts.length === 0) && (
+          <p style={{ fontSize: "14px", color: "#6b7280" }}>
+            No discounts yet. Create one above.
+          </p>
+        )}
+
+        {discounts && discounts.length > 0 && (
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              border: "1px solid #e5e7eb",
+              fontSize: "14px",
+              backgroundColor: "#ffffff",
+            }}
+          >
+            <thead style={{ backgroundColor: "#f9fafb" }}>
+              <tr>
+                <th style={{ textAlign: "left", padding: "8px" }}>Title</th>
+                <th style={{ textAlign: "left", padding: "8px" }}>%</th>
+                <th style={{ textAlign: "left", padding: "8px" }}>
+                  Product GID
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {discounts.map((d: any) => (
+                <tr key={d.id}>
+                  <td
+                    style={{
+                      padding: "8px",
+                      borderTop: "1px solid #e5e7eb",
+                    }}
+                  >
+                    {d.title}
+                  </td>
+                  <td
+                    style={{
+                      padding: "8px",
+                      borderTop: "1px solid #e5e7eb",
+                    }}
+                  >
+                    {d.percentage}%
+                  </td>
+                  <td
+                    style={{
+                      padding: "8px",
+                      borderTop: "1px solid #e5e7eb",
+                      fontFamily: "monospace",
+                      fontSize: "12px",
+                    }}
+                  >
+                    {d.productId}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+    </main>
   );
 }
 
-export const headers: HeadersFunction = (headersArgs) => {
-  return boundary.headers(headersArgs);
-};
+// keep Shopify admin headers working
+export const headers: HeadersFunction = (args) => boundary.headers(args);
