@@ -1,5 +1,6 @@
-// app/routes/api.product-discount.tsx
-// Public API for the storefront. Returns { discount: ... } or { discount: null }.
+// Public endpoint for the storefront JavaScript.
+// It receives shop and productId as query parameters
+// and returns either one discount row or null wrapped in JSON.
 
 import type { LoaderFunctionArgs } from "react-router";
 import { getDiscountForProduct } from "../models/discount.server";
@@ -7,16 +8,20 @@ import { getDiscountForProduct } from "../models/discount.server";
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
 
+  // These two values come from the theme app extension
+  // through query parameters.
   const productId = url.searchParams.get("productId");
   const shop = url.searchParams.get("shop");
 
+  // Default headers for JSON response.
   const headers = {
     "Content-Type": "application/json",
-    // allow the theme (shop domain) to read our JSON
+    // Allow the Online Store domain to call this endpoint.
     "Access-Control-Allow-Origin": "*",
   };
 
-  // missing params = just say "no discount"
+  // If we did not get the required parameters we just answer
+  // with "no discount" so the storefront does not break.
   if (!productId || !shop) {
     console.log("[api.product-discount] missing params", { productId, shop });
 
@@ -26,7 +31,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
-  // look up discount in our Prisma table
+  // Look up the discount in our own database.
   const discount = await getDiscountForProduct({ shop, productId });
 
   console.log("[api.product-discount] result", {
@@ -35,6 +40,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     found: !!discount,
   });
 
+  // We always return status 200 because from the storefront side
+  // "no discount" is not an error, it just means data.discount is null.
   return new Response(JSON.stringify({ discount }), {
     status: 200,
     headers,
