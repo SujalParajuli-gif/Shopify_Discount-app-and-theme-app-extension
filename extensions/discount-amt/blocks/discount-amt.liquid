@@ -1,60 +1,104 @@
 {%- comment -%}
   Discount badge block for product page.
+
+  Simple flow:
+  - Liquid gives us:
+      product.admin_graphql_api_id  → product GraphQL ID
+      shop.permanent_domain        → shop domain
+  - We call our app route /api/product-discount with shop + productId
+  - If there is a discount row in our DB, we show a small badge
 {%- endcomment -%}
 
-{%- assign app_base_url = "https://aruba-integration-cleaners-compliant.trycloudflare.com" -%}
+{%- assign app_base_url = "https://england-concerning-weights-signal.trycloudflare.com" -%}
+{%- comment -%} Update this when your tunnel URL changes. {%- endcomment -%}
 
 <div
+  id="discount-app-{{ block.id }}"
   class="discount-app-badge-block"
   data-product-gid="{{ product.admin_graphql_api_id }}"
+  data-shop-domain="{{ shop.permanent_domain }}"
   data-app-base-url="{{ app_base_url }}"
 >
-  <div id="discount-app-badge-text"></div>
+  {%- comment -%}
+    Placeholder so we can see something even if JS fails.
+    This will be replaced by the real discount text when fetch succeeds.
+  {%- endcomment -%}
+  <div
+    id="discount-app-badge-text-{{ block.id }}"
+    style="font-size: 13px; color: #6b7280;"
+  >
+    <!-- Discount will appear here if available -->
+  </div>
 </div>
 
 <script>
   (function () {
-    var script = document.currentScript;
-    var wrapper = script.closest(".discount-app-badge-block");
-    if (!wrapper) return;
+    // find the wrapper for THIS block using block.id
+    var wrapperId = "discount-app-{{ block.id }}";
+    var textId = "discount-app-badge-text-{{ block.id }}";
 
-    var productGid = wrapper.dataset.productGid;
-    var appBaseUrl = wrapper.dataset.appBaseUrl;
+    var wrapper = document.getElementById(wrapperId);
+    if (!wrapper) {
+      console.log("[discount-app] wrapper not found");
+      return;
+    }
 
-    if (!productGid || !appBaseUrl) return;
+    var target = document.getElementById(textId);
+    if (!target) {
+      console.log("[discount-app] text element not found");
+      return;
+    }
 
-    var target = wrapper.querySelector("#discount-app-badge-text");
-    if (!target) return;
+    // values injected by Liquid
+    var productGid = wrapper.dataset.productGid;   // gid://shopify/Product/...
+    var shopDomain = wrapper.dataset.shopDomain;   // qr-demo-dev.myshopify.com
+    var appBaseUrl = wrapper.dataset.appBaseUrl;   // tunnel URL
 
-    fetch(
+    if (!productGid || !shopDomain || !appBaseUrl) {
+      console.log("[discount-app] missing data attributes");
+      return;
+    }
+
+    // build API url for our app route
+    var url =
       appBaseUrl +
-        "/api/product-discount?productId=" +
-        encodeURIComponent(productGid)
-    )
+      "/api/product-discount?shop=" +
+      encodeURIComponent(shopDomain) +
+      "&productId=" +
+      encodeURIComponent(productGid);
+
+    // call the app and get JSON response
+    fetch(url)
       .then(function (res) {
         return res.json();
       })
       .then(function (data) {
-        if (!data || !data.discount) return;
+        if (!data || !data.discount) {
+          // if there is no discount for this product, clear any placeholder
+          target.innerHTML = "";
+          console.log("[discount-app] no discount for this product");
+          return;
+        }
 
         var d = data.discount;
 
+        // show a simple badge like: "10% OFF - Winter sale"
         target.innerHTML =
-          '<span style="display:inline-block;padding:4px 8px;border-radius:4px;background:black;color:white;font-size:13px;">' +
+          '<span style="display:inline-block; padding:4px 8px; border-radius:4px; background:black; color:white; font-size:13px;">' +
           d.percentage +
           "% OFF - " +
           d.title +
           "</span>";
       })
       .catch(function (err) {
-        console.error("Error loading discount", err);
+        console.error("[discount-app] error loading discount", err);
       });
   })();
 </script>
 
 {% schema %}
 {
-  "name": "Discount badge (app)",
+  "name": "Discount Product",
   "target": "section",
   "settings": []
 }

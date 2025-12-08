@@ -1,9 +1,10 @@
-// helper functions for our discount feature
+// Helper functions for the product discount feature.
+// These functions are used by routes to talk to the Prisma database.
 
 import invariant from "tiny-invariant";
 import db from "../db.server";
 
-// create one discount row in the database
+// Create one discount row in the ProductDiscount table.
 export async function createProductDiscount(input: {
   shop: string;
   title: string;
@@ -12,7 +13,7 @@ export async function createProductDiscount(input: {
 }) {
   const { shop, title, percentage, productId } = input;
 
-  // basic checks
+  // Basic safety checks so we do not store broken data.
   invariant(shop, "shop is required");
   invariant(title, "title is required");
   invariant(productId, "productId is required");
@@ -20,6 +21,7 @@ export async function createProductDiscount(input: {
   const percentNumber = Number(percentage);
   invariant(!Number.isNaN(percentNumber), "percentage must be a number");
 
+  // Insert one new discount row into the database.
   const discount = await db.productDiscount.create({
     data: {
       shop,
@@ -32,7 +34,8 @@ export async function createProductDiscount(input: {
   return discount;
 }
 
-// get all discounts for a shop (to show in admin page)
+// List all discounts for one shop.
+// Used in the admin page to show the table of existing discounts.
 export async function listProductDiscounts(shop: string) {
   return db.productDiscount.findMany({
     where: { shop },
@@ -40,7 +43,8 @@ export async function listProductDiscounts(shop: string) {
   });
 }
 
-// get one discount for one product (used by storefront / API)
+// Get a single discount for one product in one shop.
+// Used by the public API for the storefront.
 export async function getDiscountForProduct(input: {
   shop: string;
   productId: string;

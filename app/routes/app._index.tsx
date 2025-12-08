@@ -1,12 +1,11 @@
-// simple admin page to create + list product discounts
-// with a basic product picker (dropdown) using Admin GraphQL
-
+// Main home page for our app.
+// Here we show a simple "Product discount" admin screen.
 import type {
   LoaderFunctionArgs,
   ActionFunctionArgs,
   HeadersFunction,
 } from "react-router";
-import { useLoaderData } from "react-router";
+import { useLoaderData, Form } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
@@ -15,9 +14,10 @@ import {
   listProductDiscounts,
 } from "../models/discount.server";
 
+// very small GraphQL query to load some products for the dropdown
 const PRODUCTS_QUERY = `#graphql
   query DiscountAdminProducts {
-    products(first: 20) {
+    products(first: 30) {
       edges {
         node {
           id
@@ -28,23 +28,27 @@ const PRODUCTS_QUERY = `#graphql
   }
 `;
 
+// shape of the data we send to the React component
 type LoaderData = {
-  discounts: Awaited<ReturnType<typeof listProductDiscounts>>;
-  products: { id: string; title: string }[];
+  discounts: any[]; // rows from ProductDiscount table
+  products: { id: string; title: string }[]; // simple list for dropdown
 };
 
-// runs on server when page loads
+// this runs on the server before the page renders
 export async function loader({ request }: LoaderFunctionArgs) {
+  // check admin session and give us Admin API client
   const { session, admin } = await authenticate.admin(request);
   const shop = session.shop;
 
-  // load some products for the picker (like QR demo)
+  //get some products for the select input
   const productsResponse = await admin.graphql(PRODUCTS_QUERY);
   const productsJson = await productsResponse.json();
 
-  const products =
-    productsJson.data?.products?.edges?.map((edge: any) => edge.node) ?? [];
+  // defensive access in case data is empty
+  const productsEdges = productsJson.data?.products?.edges || [];
+  const products = productsEdges.map((edge: any) => edge.node);
 
+  //get all discounts from our own DB table for this shop
   const discounts = await listProductDiscounts(shop);
 
   const data: LoaderData = {
@@ -55,17 +59,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return data;
 }
 
-// runs when the form sends POST request
+// this runs when the form does a POST (Form method="post")
 export async function action({ request }: ActionFunctionArgs) {
   const { session } = await authenticate.admin(request);
   const shop = session.shop;
 
+  // read values from FormData
   const formData = await request.formData();
-
   const title = String(formData.get("title") || "");
   const percentage = Number(formData.get("percentage") || 0);
   const productId = String(formData.get("productId") || "");
 
+  // save one new row in ProductDiscount table
   await createProductDiscount({
     shop,
     title,
@@ -73,17 +78,16 @@ export async function action({ request }: ActionFunctionArgs) {
     productId,
   });
 
-  // basic redirect back to this page
+  // simple redirect back to /app so loader runs again
   return new Response(null, {
     status: 302,
-    headers: { Location: "/app/discounts" },
+    headers: { Location: "/app" },
   });
 }
 
-// React part + HTML form (what admin sees)
-export default function DiscountsIndex() {
+// React UI that admin sees
+export default function Index() {
   const { discounts, products } = useLoaderData() as LoaderData;
-
   const hasProducts = products.length > 0;
 
   return (
@@ -95,10 +99,10 @@ export default function DiscountsIndex() {
           marginBottom: "16px",
         }}
       >
-        Product discounts (demo)
+        Product discounts
       </h1>
 
-      {/* create form */}
+      {/* ----- create discount form ----- */}
       <section
         style={{
           marginBottom: "24px",
@@ -127,11 +131,13 @@ export default function DiscountsIndex() {
             }}
           >
             This store doesn&apos;t have any products yet. Create a product
-            first, then you can attach a discount to it.
+            first in Shopify, then refresh this page.
           </p>
         )}
 
-        <form method="post">
+        {/* important: use Form from react-router, not plain <form> */}
+        <Form method="post">
+          {/* title input */}
           <div style={{ marginBottom: "12px" }}>
             <label
               style={{
@@ -156,6 +162,7 @@ export default function DiscountsIndex() {
             />
           </div>
 
+          {/* percentage input */}
           <div style={{ marginBottom: "12px" }}>
             <label
               style={{
@@ -183,6 +190,7 @@ export default function DiscountsIndex() {
             />
           </div>
 
+          {/* product dropdown (picker) */}
           <div style={{ marginBottom: "12px" }}>
             <label
               style={{
@@ -226,9 +234,8 @@ export default function DiscountsIndex() {
                 marginTop: "4px",
               }}
             >
-              This works like the QR demo product picker: it uses the
-              product&apos;s GraphQL ID under the hood, but you don&apos;t need
-              to paste the GID manually.
+              Works like the QR demo picker: we store the product's GraphQL ID
+              but you only choose the name.
             </p>
           </div>
 
@@ -247,10 +254,10 @@ export default function DiscountsIndex() {
           >
             Save discount
           </button>
-        </form>
+        </Form>
       </section>
 
-      {/* list existing discounts */}
+      {/* ----- list existing discounts ----- */}
       <section>
         <h2
           style={{
@@ -326,5 +333,6 @@ export default function DiscountsIndex() {
   );
 }
 
-// keep Shopify admin headers working
-export const headers: HeadersFunction = (args) => boundary.headers(args);
+// keep Shopify special headers working for this route
+export const headers: HeadersFunction = (headersArgs) =>
+  boundary.headers(headersArgs);
