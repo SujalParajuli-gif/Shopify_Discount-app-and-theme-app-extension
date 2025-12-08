@@ -58,3 +58,37 @@ export async function getDiscountForProduct(input: {
     },
   });
 }
+
+// Delete a single discount row by id for a given shop.
+// Using deleteMany instead of delete so we also check the shop field.
+export async function deleteProductDiscountById(input: {
+  shop: string;
+  id: string;
+}) {
+  const { shop, id } = input;
+
+  if (!id) {
+    throw new Error("id is required to delete product discount");
+  }
+
+  return db.productDiscount.deleteMany({
+    where: {
+      id,
+      shop,
+    },
+  });
+}
+
+// Delete all discount rows for a given shop.
+// This is used for the "Clear all discounts" button in the admin.
+export async function deleteAllDiscountsForShop(shop: string) {
+  if (!shop) {
+    throw new Error("shop is required to delete all discounts");
+  }
+
+  return db.productDiscount.deleteMany({
+    where: {
+      shop,
+    },
+  });
+}

@@ -1,65 +1,104 @@
 {%- comment -%}
-  Discount badge block for product page.
+  Discount block for product pages or product cards.
 
-  Simple flow:
-  - Liquid gives us:
-      product.admin_graphql_api_id  → product GraphQL ID
-      shop.permanent_domain        → shop domain
-  - We call our app route /api/product-discount with shop + productId
-  - If there is a discount row in our DB, we show a small badge
+  High level flow:
+  - Liquid gives us the product object and shop data.
+  - We print:
+      - product.admin_graphql_api_id as data-product-gid
+      - product.price as data-product-price (money without currency)
+      - shop.permanent_domain as data-shop-domain
+      - our app tunnel URL as data-app-base-url
+  - A small inline script reads these values in the browser.
+  - The script calls our app route /api/product-discount with shop and productId.
+  - If the API returns a discount row, the script:
+      - shows a small "X% OFF" badge
+      - calculates a discounted price from base price and percentage
+      - renders original price and discounted price in the block.
 {%- endcomment -%}
 
-{%- assign app_base_url = "https://england-concerning-weights-signal.trycloudflare.com" -%}
-{%- comment -%} Update this when your tunnel URL changes. {%- endcomment -%}
+{%- assign app_base_url = "https://colored-recipes-destination-working.trycloudflare.com" -%}
+{%- comment -%} Update this value when the tunnel URL changes. No trailing slash. {%- endcomment -%}
 
 <div
   id="discount-app-{{ block.id }}"
-  class="discount-app-badge-block"
+  class="discount-app-block"
   data-product-gid="{{ product.admin_graphql_api_id }}"
   data-shop-domain="{{ shop.permanent_domain }}"
   data-app-base-url="{{ app_base_url }}"
+  data-product-price="{{ product.price | money_without_currency }}"
 >
   {%- comment -%}
-    Placeholder so we can see something even if JS fails.
-    This will be replaced by the real discount text when fetch succeeds.
+    The inner elements start empty.
+    JavaScript will fill them after the API call.
   {%- endcomment -%}
+
   <div
     id="discount-app-badge-text-{{ block.id }}"
-    style="font-size: 13px; color: #6b7280;"
+    style="font-size: 13px; color: #6b7280; margin-bottom: 4px;"
   >
-    <!-- Discount will appear here if available -->
+    <!-- Discount badge will be inserted here -->
+  </div>
+
+  <div
+    id="discount-app-price-text-{{ block.id }}"
+    style="font-size: 14px; color: #111827;"
+  >
+    <!-- Original and discounted prices will be inserted here -->
   </div>
 </div>
 
 <script>
   (function () {
-    // find the wrapper for THIS block using block.id
+    // Use block.id to make sure we only target this block instance.
     var wrapperId = "discount-app-{{ block.id }}";
-    var textId = "discount-app-badge-text-{{ block.id }}";
+    var badgeId = "discount-app-badge-text-{{ block.id }}";
+    var priceId = "discount-app-price-text-{{ block.id }}";
 
     var wrapper = document.getElementById(wrapperId);
     if (!wrapper) {
-      console.log("[discount-app] wrapper not found");
+      console.log("[discount-app] wrapper not found", wrapperId);
       return;
     }
 
-    var target = document.getElementById(textId);
-    if (!target) {
-      console.log("[discount-app] text element not found");
+    var badgeTarget = document.getElementById(badgeId);
+    var priceTarget = document.getElementById(priceId);
+
+    if (!badgeTarget || !priceTarget) {
+      console.log("[discount-app] inner targets not found");
       return;
     }
 
-    // values injected by Liquid
-    var productGid = wrapper.dataset.productGid;   // gid://shopify/Product/...
-    var shopDomain = wrapper.dataset.shopDomain;   // qr-demo-dev.myshopify.com
-    var appBaseUrl = wrapper.dataset.appBaseUrl;   // tunnel URL
+    // Read data values that Liquid placed on the wrapper.
+    var productGid = wrapper.dataset.productGid;
+    var shopDomain = wrapper.dataset.shopDomain;
+    var appBaseUrl = wrapper.dataset.appBaseUrl;
+    var rawPrice = wrapper.dataset.productPrice;
 
-    if (!productGid || !shopDomain || !appBaseUrl) {
+    console.log("[discount-app] data", {
+      productGid: productGid,
+      shopDomain: shopDomain,
+      appBaseUrl: appBaseUrl,
+      productPrice: rawPrice,
+    });
+
+    // If any of these are missing there is not enough information
+    // to call the API or calculate the price, so we exit early.
+    if (!productGid || !shopDomain || !appBaseUrl || !rawPrice) {
       console.log("[discount-app] missing data attributes");
       return;
     }
 
-    // build API url for our app route
+    // Convert the price string to a number.
+    // money_without_currency can contain commas so we remove them.
+    var normalizedPrice = rawPrice.replace(/,/g, "").trim();
+    var basePriceNumber = parseFloat(normalizedPrice);
+
+    if (Number.isNaN(basePriceNumber)) {
+      console.log("[discount-app] could not parse product price", rawPrice);
+      return;
+    }
+
+    // Build the API url for our Remix route.
     var url =
       appBaseUrl +
       "/api/product-discount?shop=" +
@@ -67,27 +106,60 @@
       "&productId=" +
       encodeURIComponent(productGid);
 
-    // call the app and get JSON response
+    console.log("[discount-app] fetching", url);
+
+    // Call the app API and process the JSON result.
     fetch(url)
       .then(function (res) {
+        console.log("[discount-app] response status", res.status);
         return res.json();
       })
       .then(function (data) {
+        console.log("[discount-app] response json", data);
+
+        // If there is no discount for this product we simply
+        // clear our placeholders and show nothing from this block.
         if (!data || !data.discount) {
-          // if there is no discount for this product, clear any placeholder
-          target.innerHTML = "";
+          badgeTarget.innerHTML = "";
+          priceTarget.innerHTML = "";
           console.log("[discount-app] no discount for this product");
           return;
         }
 
         var d = data.discount;
 
-        // show a simple badge like: "10% OFF - Winter sale"
-        target.innerHTML =
+        // Example: 10 means 10 percent off.
+        var percentage = Number(d.percentage);
+        if (Number.isNaN(percentage) || percentage <= 0) {
+          console.log("[discount-app] invalid discount percentage", d.percentage);
+          return;
+        }
+
+        // Calculate discounted price in the browser.
+        // This is Option A where we do the calculation on the storefront.
+        var discounted = basePriceNumber * (100 - percentage) / 100;
+
+        // Format prices with two decimal places.
+        var basePriceText = basePriceNumber.toFixed(2);
+        var discountedText = discounted.toFixed(2);
+
+        // Render badge text.
+        badgeTarget.innerHTML =
           '<span style="display:inline-block; padding:4px 8px; border-radius:4px; background:black; color:white; font-size:13px;">' +
-          d.percentage +
+          percentage +
           "% OFF - " +
           d.title +
+          "</span>";
+
+        // Render original and discounted prices.
+        // We keep currency symbol out to avoid conflicts with theme formatting.
+        // The theme already shows its own price, so this is an extra helper line.
+        priceTarget.innerHTML =
+          '<span style="text-decoration: line-through; color: #6b7280; margin-right: 8px;">' +
+          basePriceText +
+          '</span>' +
+          '<span style="font-weight: 600;">' +
+          discountedText +
           "</span>";
       })
       .catch(function (err) {
