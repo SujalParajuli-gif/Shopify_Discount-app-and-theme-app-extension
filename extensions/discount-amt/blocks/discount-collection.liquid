@@ -1,9 +1,71 @@
-{%- assign app_base_url = "https://sites-answers-retention-certification.trycloudflare.com" -%}
+
+{%- comment -%}
+  Discount collection section for home page.
+  Shows a grid of products from a chosen collection with discount badge + prices.
+{%- endcomment -%}
+{%- assign app_base_url = "https://joint-jill-supported-accountability.trycloudflare.com" -%}
 
 {%- if block.settings.collection != blank -%}
   {%- assign discount_collection = block.settings.collection -%}
 
+  <style>
+    /* Grid + card styling (try to match Featured products look) */
+    #discount-collection-{{ block.id }} {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 24px;
+    }
+
+    #discount-collection-{{ block.id }} .discount-card {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+      transition: transform 150ms ease, box-shadow 150ms ease;
+    }
+
+    #discount-collection-{{ block.id }} .discount-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
+    }
+
+    #discount-collection-{{ block.id }} img {
+      border-radius: 12px;
+    }
+
+    #discount-collection-{{ block.id }} .discount-title {
+      font-size: 14px;
+      margin-top: 10px;
+      margin-bottom: 4px;
+    }
+
+    #discount-collection-{{ block.id }} .discount-price-target {
+      font-size: 14px;
+      color: #111827;
+    }
+
+    /* Heading for this section instance */
+    .discount-collection-heading-{{ block.id }} {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 20px;
+    }
+  </style>
+
+  {%- comment -%}
+    Optional heading text – editable from the section settings.
+  {%- endcomment -%}
+  {%- if block.settings.heading != blank -%}
+    <h2 class="discount-collection-heading-{{ block.id }}">
+      {{ block.settings.heading }}
+    </h2>
+  {%- endif -%}
+
   <div class="discount-collection-grid" id="discount-collection-{{ block.id }}">
+    {%- comment -%}
+      Loop products from the selected collection.
+      We pass id, shop and price down to JS through data-* attributes.
+    {%- endcomment -%}
     {%- for product in discount_collection.products limit: block.settings.products_limit -%}
       <div
         class="discount-card"
@@ -12,18 +74,18 @@
         data-app-base-url="{{ app_base_url }}"
         data-product-price="{{ product.selected_or_first_available_variant.price | money_without_currency }}"
       >
-        <a href="{{ product.url }}" style="text-decoration:none; color:inherit;">
-          <div style="margin-bottom:8px;">
+        <a href="{{ product.url }}" style="text-decoration:none; color:inherit; display:block;">
+          <div>
             {%- if product.featured_image -%}
               <img
-                src="{{ product.featured_image | img_url: '360x' }}"
+                src="{{ product.featured_image | img_url: '540x' }}"
                 alt="{{ product.featured_image.alt | escape }}"
                 style="width:100%; display:block;"
               >
             {%- endif -%}
           </div>
 
-          <div style="font-size:14px; margin-bottom:4px;">
+          <div class="discount-title">
             {{ product.title }}
           </div>
 
@@ -32,10 +94,7 @@
             style="font-size: 13px; color: #6b7280; margin-bottom: 4px;"
           ></div>
 
-          <div
-            class="discount-price-target"
-            style="font-size: 14px; color: #111827;"
-          ></div>
+          <div class="discount-price-target"></div>
         </a>
       </div>
     {%- endfor -%}
@@ -43,6 +102,7 @@
 
   <script>
     (function () {
+      // Scope everything to this section instance.
       var grid = document.getElementById("discount-collection-{{ block.id }}");
       if (!grid) return;
 
@@ -50,12 +110,13 @@
       if (!cards.length) return;
 
       cards.forEach(function (card) {
+        // Read data from Liquid.
         var productNumericId = card.dataset.productId;
         var shopDomain = card.dataset.shopDomain;
         var appBaseUrl = card.dataset.appBaseUrl;
         var rawPrice = card.dataset.productPrice;
 
-        // Build GraphQL product GID from numeric id.
+        // Build GraphQL product GID so it matches ids in our DB.
         var productGid = productNumericId
           ? "gid://shopify/Product/" + productNumericId
           : null;
@@ -65,6 +126,7 @@
           return;
         }
 
+        // Call our Remix API to check if this product has a discount row.
         var url =
           appBaseUrl +
           "/api/product-discount?shop=" +
@@ -81,6 +143,7 @@
             var priceTarget = card.querySelector(".discount-price-target");
             if (!badgeTarget || !priceTarget) return;
 
+            // No discount → keep this section as "discounted items only".
             if (!data || !data.discount) {
               badgeTarget.innerHTML = "";
               priceTarget.innerHTML = "";
@@ -91,8 +154,9 @@
             var percentage = Number(d.percentage);
             if (Number.isNaN(percentage) || percentage <= 0) return;
 
+            // Badge text: "X% OFF - Title"
             badgeTarget.innerHTML =
-              '<span style="display:inline-block; padding:4px 8px; border-radius:4px; background:black; color:white; font-size:13px;">' +
+              '<span style="display:inline-block; padding:4px 8px; border-radius:999px; background:black; color:white; font-size:13px;">' +
               percentage +
               "% OFF - " +
               d.title +
@@ -103,6 +167,7 @@
               return;
             }
 
+            // Parse base price from Liquid and calculate discounted price.
             var normalizedPrice = rawPrice.replace(/,/g, "").trim();
             var basePriceNumber = parseFloat(normalizedPrice);
             if (Number.isNaN(basePriceNumber)) {
@@ -114,6 +179,7 @@
             var basePriceText = basePriceNumber.toFixed(2);
             var discountedText = discounted.toFixed(2);
 
+            // Original price (strike-through) + discounted price.
             priceTarget.innerHTML =
               '<span style="text-decoration: line-through; color: #6b7280; margin-right: 8px;">' +
               basePriceText +
@@ -135,6 +201,12 @@
   "name": "Discount collection",
   "target": "section",
   "settings": [
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Discounted products"
+    },
     {
       "type": "collection",
       "id": "collection",
