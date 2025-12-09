@@ -17,7 +17,7 @@
       - show both original and discounted prices inside this block.
 {%- endcomment -%}
 
-{%- assign app_base_url = "https://istanbul-recruitment-nascar-efficiency.trycloudflare.com" -%}
+{%- assign app_base_url = "" -%}
 {%- comment -%}
   Change this when the tunnel URL changes.
   Keep it without a trailing slash.
@@ -187,6 +187,13 @@
 {
   "name": "Discount Product",
   "target": "section",
-  "settings": []
+  "settings": [
+    {
+      "type": "product",
+      "id": "product",
+      "label": "Product",
+      "autofill": true
+    }
+  ]
 }
 {% endschema %}
