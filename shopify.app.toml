@@ -21,8 +21,19 @@ api_version = "2026-01"
   uri = "/webhooks/app/scopes_update"
 
 [access_scopes]
-# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products"
+# Added write_app_proxy so the app can configure an app proxy
+scopes = "write_products,write_app_proxy"
 
 [auth]
 redirect_urls = [ "https://example.com/api/auth" ]
+
+# Added App proxy config
+[app_proxy]
+# Route inside our Remix app that will actually handle the request
+# (this is our existing API route)
+url = "/api/product-discount"
+
+# Path our storefront theme will call:
+# /apps/product-discount → proxied to /api/product-discount
+prefix = "apps"
+subpath = "product-discount"

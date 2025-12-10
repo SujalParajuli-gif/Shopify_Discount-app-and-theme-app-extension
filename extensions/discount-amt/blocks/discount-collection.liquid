@@ -1,9 +1,12 @@
-
 {%- comment -%}
   Discount collection section for home page.
   Shows a grid of products from a chosen collection with discount badge + prices.
 {%- endcomment -%}
-{%- assign app_base_url = "https://joint-jill-supported-accountability.trycloudflare.com" -%}
+{%- comment -%}
+  Using app proxy, so we only need the storefront path.
+  Shopify will forward this to our app's /api/product-discount route.
+{%- endcomment -%}
+{%- assign discount_proxy_path = "/apps/product-discount" -%}
 
 {%- if block.settings.collection != blank -%}
   {%- assign discount_collection = block.settings.collection -%}
@@ -71,18 +74,21 @@
         class="discount-card"
         data-product-id="{{ product.id }}"
         data-shop-domain="{{ shop.permanent_domain }}"
-        data-app-base-url="{{ app_base_url }}"
+        data-app-proxy-path="{{ discount_proxy_path }}"
         data-product-price="{{ product.selected_or_first_available_variant.price | money_without_currency }}"
       >
         <a href="{{ product.url }}" style="text-decoration:none; color:inherit; display:block;">
           <div>
-            {%- if product.featured_image -%}
-              <img
-                src="{{ product.featured_image | img_url: '540x' }}"
-                alt="{{ product.featured_image.alt | escape }}"
-                style="width:100%; display:block;"
-              >
-            {%- endif -%}
+        {%- if product.featured_image -%}
+  <img
+    src="{{ product.featured_image | image_url: width: 540 }}"
+    alt="{{ product.featured_image.alt | escape }}"
+    width="540"
+    height="{{ 240 | divided_by: product.featured_image.aspect_ratio | round }}"
+    style="width:100%; display:block;"
+  >
+{%- endif -%}
+
           </div>
 
           <div class="discount-title">
@@ -113,7 +119,7 @@
         // Read data from Liquid.
         var productNumericId = card.dataset.productId;
         var shopDomain = card.dataset.shopDomain;
-        var appBaseUrl = card.dataset.appBaseUrl;
+        var appProxyPath = card.dataset.appProxyPath || "{{ discount_proxy_path }}";
         var rawPrice = card.dataset.productPrice;
 
         // Build GraphQL product GID so it matches ids in our DB.
@@ -121,15 +127,15 @@
           ? "gid://shopify/Product/" + productNumericId
           : null;
 
-        if (!productGid || !shopDomain || !appBaseUrl) {
-          console.log("[discount-app][collection] missing id/shop/app url");
+        if (!productGid || !shopDomain || !appProxyPath) {
+          console.log("[discount-app][collection] missing id/shop/proxy path");
           return;
         }
 
-        // Call our Remix API to check if this product has a discount row.
+        // Call our Remix API via app proxy to check if this product has a discount row.
         var url =
-          appBaseUrl +
-          "/api/product-discount?shop=" +
+          appProxyPath +
+          "?shop=" +
           encodeURIComponent(shopDomain) +
           "&productId=" +
           encodeURIComponent(productGid);
