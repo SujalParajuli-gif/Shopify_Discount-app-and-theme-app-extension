@@ -7,28 +7,28 @@
       - product.id as data-product-id (numeric id from Shopify)
       - the selected variant price as data-product-price (no currency symbol)
       - shop.permanent_domain as data-shop-domain
-      - our app tunnel URL as data-app-base-url
+      - our app proxy path as data-proxy-path
   - In JavaScript we turn the numeric product id into a GraphQL id:
       gid://shopify/Product/<numeric id>
-  - The script calls /api/product-discount with shop and productId.
+  - The script calls the app proxy path + /api/product-discount with shop and productId.
   - If the API returns a discount row, we:
       - show a "X% OFF" badge
       - calculate the discounted price from the base price and percentage
       - show both original and discounted prices inside this block.
 {%- endcomment -%}
 
-{%- assign app_base_url = "https://employee-lace-surname-eden.trycloudflare.com" -%}
 {%- comment -%}
-  Change this when the tunnel URL changes.
-  Keep it without a trailing slash.
+  Using app proxy, so we only need the storefront path.
+  Shopify will forward this to our app's /api/product-discount route.
 {%- endcomment -%}
+{%- assign discount_proxy_path = "/apps/product-discount" -%}
 
 <div
   id="discount-app-{{ block.id }}"
   class="discount-app-block"
   data-product-id="{{ product.id }}"
   data-shop-domain="{{ shop.permanent_domain }}"
-  data-app-base-url="{{ app_base_url }}"
+  data-proxy-path="{{ discount_proxy_path }}"
   data-product-price="{{ product.selected_or_first_available_variant.price | money_without_currency }}"
 >
   {%- comment -%}
@@ -75,7 +75,7 @@
     // Read values that Liquid stored as data attributes.
     var productNumericId = wrapper.dataset.productId;
     var shopDomain = wrapper.dataset.shopDomain;
-    var appBaseUrl = wrapper.dataset.appBaseUrl;
+    var appProxyPath = wrapper.dataset.proxyPath;
     var rawPrice = wrapper.dataset.productPrice;
 
     // Turn the numeric product id into the GraphQL id format
@@ -89,19 +89,20 @@
       productIdNumeric: productNumericId,
       productGid: productGid,
       shopDomain: shopDomain,
-      appBaseUrl: appBaseUrl,
+      appProxyPath: appProxyPath,
       productPrice: rawPrice,
     });
 
-    // We at least need a product id, shop domain, and base URL.
-    if (!productGid || !shopDomain || !appBaseUrl) {
+    // We at least need a product id, shop domain, and proxy path.
+    if (!productGid || !shopDomain || !appProxyPath) {
       console.log("[discount-app] missing required id or shop data");
       return;
     }
 
-    // Build the API URL for our Remix route.
+    // Build the API URL for our app proxy route.
+    // Shopify will forward this to /api/product-discount in the app.
     var url =
-      appBaseUrl +
+      appProxyPath +
       "/api/product-discount?shop=" +
       encodeURIComponent(shopDomain) +
       "&productId=" +
