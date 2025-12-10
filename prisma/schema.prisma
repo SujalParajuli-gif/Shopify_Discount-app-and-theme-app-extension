@@ -38,3 +38,19 @@ model ProductDiscount {
   productId  String   // Shopify product GID (gid://shopify/Product/123...)
   createdAt  DateTime @default(now())
 }
+
+model BuyXGetYDiscount {
+  id            String   @id @default(cuid())
+  shop          String   // shop.permanent_domain
+
+  productXGid   String   // gid://shopify/Product/...
+  productYGid   String   // gid://shopify/Product/...
+
+  quantityX     Int      // how many X items customer must buy
+  quantityY     Int      // how many Y items are discounted 
+
+  percentageOff Int      // discount on Y in %, e.g. 20 = 20% off Y
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
