@@ -5,6 +5,21 @@ import { AppProvider } from "@shopify/shopify-app-react-router/react";
 
 import { authenticate } from "../shopify.server";
 
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      "s-app-nav": React.DetailedHTMLProps<
+        React.HTMLAttributes<HTMLElement>,
+        HTMLElement
+      >;
+      "s-link": React.DetailedHTMLProps<
+        React.HTMLAttributes<HTMLElement> & { href?: string },
+        HTMLElement
+      >;
+    }
+  }
+}
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
 

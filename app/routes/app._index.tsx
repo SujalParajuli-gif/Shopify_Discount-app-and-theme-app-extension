@@ -441,6 +441,8 @@ export default function Index() {
       <br></br>
       <br></br>
 
+      {/* ---------------------------------------------------*/}
+
       {/* Buy X Get Y discount form */}
       <section
         style={{
@@ -620,7 +622,7 @@ export default function Index() {
                 marginTop: "4px",
               }}
             >
-              Example: 100 = free, 50 = 50% off Y.
+              Example: 100 = free and 50 = 50% off Y.
             </p>
           </div>
 
