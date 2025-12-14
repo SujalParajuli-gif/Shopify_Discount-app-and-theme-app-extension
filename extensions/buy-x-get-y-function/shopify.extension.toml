@@ -1,0 +1,22 @@
+api_version = "2025-04"
+
+[[extensions]]
+name = "t:name"
+handle = "buy-x-get-y-function"
+type = "function"
+uid = "bb259fb3-7ac6-5027-7c67-7c069992790876275ea0"
+description = "t:description"
+
+  [[extensions.targeting]]
+  target = "cart.lines.discounts.generate.run"
+  input_query = "src/cart_lines_discounts_generate_run.graphql"
+  export = "cart-lines-discounts-generate-run"
+
+  [[extensions.targeting]]
+  target = "cart.delivery-options.discounts.generate.run"
+  input_query = "src/cart_delivery_options_discounts_generate_run.graphql"
+  export = "cart-delivery-options-discounts-generate-run"
+
+  [extensions.build]
+  command = ""
+  path = "dist/function.wasm"

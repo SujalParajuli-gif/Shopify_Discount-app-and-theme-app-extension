@@ -26,7 +26,7 @@
 <div
   id="discount-app-{{ block.id }}"
   class="discount-app-block"
-  data-product-id="{{ product.id }}"
+  data-product-gid="{{ product.admin_graphql_api_id }}"
   data-shop-domain="{{ shop.permanent_domain }}"
   data-proxy-path="{{ discount_proxy_path }}"
   data-product-price="{{ product.selected_or_first_available_variant.price | money_without_currency }}"
@@ -73,20 +73,17 @@
     }
 
     // Read values that Liquid stored as data attributes.
-    var productNumericId = wrapper.dataset.productId;
+    //  we now send the GraphQL product id directly from Liquid.
+    var productGid = wrapper.dataset.productGid;
     var shopDomain = wrapper.dataset.shopDomain;
     var appProxyPath = wrapper.dataset.proxyPath;
     var rawPrice = wrapper.dataset.productPrice;
 
     // Turn the numeric product id into the GraphQL id format
     // so it matches the ids we stored in the database from the admin app.
-    var productGid = null;
-    if (productNumericId) {
-      productGid = "gid://shopify/Product/" + productNumericId;
-    }
+    // The effective productGid is already in GraphQL format from data-product-gid.
 
     console.log("[discount-app] data", {
-      productIdNumeric: productNumericId,
       productGid: productGid,
       shopDomain: shopDomain,
       appProxyPath: appProxyPath,
@@ -101,9 +98,11 @@
 
     // Build the API URL for our app proxy route.
     // Shopify will forward this to /api/product-discount in the app.
+    //  we only call /apps/product-discount here;
+    // the proxy mapping in app.toml adds /api/product-discount on the app side.
     var url =
       appProxyPath +
-      "/api/product-discount?shop=" +
+      "?shop=" +
       encodeURIComponent(shopDomain) +
       "&productId=" +
       encodeURIComponent(productGid);
@@ -127,11 +126,12 @@
           return;
         }
 
-        var d = data.discount;
-        var percentage = Number(d.percentage);
+        var d = data;
+        var discount = d.discount;
+        var percentage = Number(discount.percentage);
 
         if (Number.isNaN(percentage) || percentage <= 0) {
-          console.log("[discount-app] invalid discount percentage", d.percentage);
+          console.log("[discount-app] invalid discount percentage", discount.percentage);
           return;
         }
 
@@ -140,7 +140,7 @@
           '<span style="display:inline-block; padding:4px 8px; border-radius:4px; background:black; color:white; font-size:13px;">' +
           percentage +
           "% OFF - " +
-          d.title +
+          discount.title +
           "</span>";
 
         // If the price is missing we can still keep the badge.

@@ -1,0 +1,78 @@
+<div class="buy-x-get-y-cart-message" style="padding: 16px 0;">
+  {%- comment -%}
+    This is just a helper area in the cart.
+    We use it to see what is inside the cart and what discounts were applied.
+  {%- endcomment -%}
+
+  <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">
+    Buy X Get Y helper
+  </h3>
+
+  {%- if cart.item_count == 0 -%}
+    <p>Our cart is empty right now.</p>
+  {%- else -%}
+    <p style="margin-bottom: 8px;">
+      Items in cart: {{ cart.item_count }}
+    </p>
+
+    <ul style="list-style: none; padding: 0; margin: 0 0 12px 0;">
+      {%- for line_item in cart.items -%}
+        <li style="margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 8px;">
+          <strong>{{ line_item.product.title }}</strong>
+          <br>
+          Qty: {{ line_item.quantity }}
+          <br>
+          Original line price:
+          {{ line_item.original_line_price | money }}
+          <br>
+          Final line price:
+          {{ line_item.final_line_price | money }}
+
+          {%- if line_item.discount_allocations.size > 0 -%}
+            <br>
+            <span style="font-size: 13px; color: #059669;">
+              Discounts on this line:
+            </span>
+            <ul style="list-style: disc; margin: 4px 0 0 18px; padding: 0;">
+              {%- for da in line_item.discount_allocations -%}
+                <li style="font-size: 13px;">
+                  {{ da.discount_application.title }}
+                  (saved {{ da.amount | money }})
+                </li>
+              {%- endfor -%}
+            </ul>
+          {%- endif -%}
+        </li>
+      {%- endfor -%}
+    </ul>
+
+    {%- if cart.cart_level_discount_applications.size > 0 -%}
+      <p style="font-size: 14px; margin-bottom: 4px;">
+        Cart-level discounts:
+      </p>
+      <ul style="list-style: disc; margin-left: 18px; padding: 0;">
+        {%- for disc in cart.cart_level_discount_applications -%}
+          <li style="font-size: 13px;">
+            {{ disc.title }}
+          </li>
+        {%- endfor -%}
+      </ul>
+    {%- else -%}
+      <p style="font-size: 13px; color: #6b7280;">
+        No discounts applied yet. When our discount function runs,
+        we’ll see the discount for product Y here.
+      </p>
+    {%- endif -%}
+  {%- endif -%}
+</div>
+
+{% schema %}
+{
+  "name": "Buy X Get Y cart message",
+  "target": "section",
+  "enabled_on": {
+    "templates": ["cart"]
+  },
+  "settings": []
+}
+{% endschema %}
