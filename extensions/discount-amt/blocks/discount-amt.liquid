@@ -26,7 +26,12 @@
 <div
   id="discount-app-{{ block.id }}"
   class="discount-app-block"
-  data-product-gid="{{ product.admin_graphql_api_id }}"
+  {%- comment -%}
+    We keep the numeric product id (for debugging) and also
+    pre-build the GraphQL gid string so it matches what we stored in Prisma.
+  {%- endcomment -%}
+  data-product-id="{{ product.id }}"
+  data-product-gid="gid://shopify/Product/{{ product.id }}"
   data-shop-domain="{{ shop.permanent_domain }}"
   data-proxy-path="{{ discount_proxy_path }}"
   data-product-price="{{ product.selected_or_first_available_variant.price | money_without_currency }}"
@@ -75,15 +80,24 @@
     // Read values that Liquid stored as data attributes.
     //  we now send the GraphQL product id directly from Liquid.
     var productGid = wrapper.dataset.productGid;
+    // small fallback: also keep the raw numeric product id
+    var productId = wrapper.dataset.productId;
     var shopDomain = wrapper.dataset.shopDomain;
     var appProxyPath = wrapper.dataset.proxyPath;
     var rawPrice = wrapper.dataset.productPrice;
+
+    // If for some reason productGid is not set, try to build it
+    // from the numeric product id we got from Liquid.
+    if ((!productGid || productGid === "") && productId) {
+      productGid = "gid://shopify/Product/" + productId;
+    }
 
     // Turn the numeric product id into the GraphQL id format
     // so it matches the ids we stored in the database from the admin app.
     // The effective productGid is already in GraphQL format from data-product-gid.
 
     console.log("[discount-app] data", {
+      productId: productId,
       productGid: productGid,
       shopDomain: shopDomain,
       appProxyPath: appProxyPath,
@@ -131,7 +145,10 @@
         var percentage = Number(discount.percentage);
 
         if (Number.isNaN(percentage) || percentage <= 0) {
-          console.log("[discount-app] invalid discount percentage", discount.percentage);
+          console.log(
+            "[discount-app] invalid discount percentage",
+            discount.percentage
+          );
           return;
         }
 
@@ -145,7 +162,9 @@
 
         // If the price is missing we can still keep the badge.
         if (!rawPrice) {
-          console.log("[discount-app] no product price provided, skipping price display");
+          console.log(
+            "[discount-app] no product price provided, skipping price display"
+          );
           priceTarget.innerHTML = "";
           return;
         }
@@ -156,7 +175,10 @@
         var basePriceNumber = parseFloat(normalizedPrice);
 
         if (Number.isNaN(basePriceNumber)) {
-          console.log("[discount-app] could not parse product price", rawPrice);
+          console.log(
+            "[discount-app] could not parse product price",
+            rawPrice
+          );
           priceTarget.innerHTML = "";
           return;
         }
