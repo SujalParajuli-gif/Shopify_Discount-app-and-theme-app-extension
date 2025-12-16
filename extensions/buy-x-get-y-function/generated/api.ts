@@ -202,7 +202,7 @@ export type CartLocalizedFieldsArgs = {
  */
 export type CartCost = {
   __typename?: 'CartCost';
-  /** The amount for the customer to pay at checkout, excluding taxes and discounts. */
+  /** The amount, before taxes and cart-level discounts, for the customer to pay. */
   subtotalAmount: MoneyV2;
   /** The total amount for the customer to pay at checkout. */
   totalAmount: MoneyV2;
@@ -354,7 +354,7 @@ export type CartLineCost = {
    */
   amountPerQuantity: MoneyV2;
   /**
-   * The cost of a single unit before any discounts are applied. This field is used to calculate and display
+   * The `compareAt` price of a single unit before any discounts are applied. This field is used to calculate and display
    * savings for customers. For example, if a product's `compareAtAmountPerQuantity` is $25 and its current price
    * is $20, then the customer sees a $5 discount. This value can change based on the buyer's identity and is
    * `null` when the value is hidden from buyers.
@@ -1535,7 +1535,11 @@ export type DeliverableCartLineAttributeArgs = {
 
 /** The discount that's eligible to be applied to a delivery. */
 export type DeliveryDiscountCandidate = {
-  /** The discount code that's eligible to be applied to a delivery. */
+  /**
+   * An optional discount code associated with this discount candidate, for use
+   * with automatic discounts. If a code discount is the function trigger, the
+   * associated discount code will be overwritten by the triggering discount code.
+   */
   associatedDiscountCode?: InputMaybe<AssociatedDiscountCode>;
   /**
    * A notification on the **Cart** page informs customers about available
@@ -1660,7 +1664,7 @@ export type DeliveryOptionTarget = {
 /** The discount that invoked the [Discount Function](https://shopify.dev/docs/apps/build/discounts#build-with-shopify-functions)). */
 export type Discount = HasMetafields & {
   __typename?: 'Discount';
-  /** The [discount classes](https://shopify.dev/docs/apps/build/discounts/#discount-classes)) that the [discountNode](https://shopify.dev/docs/api/admin-graphql/latest/queries/discountNode)) supports. */
+  /** The [discount classes](https://shopify.dev/docs/apps/build/discounts/#discount-classes) that the [discountNode](https://shopify.dev/docs/api/admin-graphql/latest/queries/discountNode) supports. */
   discountClasses: Array<DiscountClass>;
   /**
    * A [custom field](https://shopify.dev/docs/apps/build/custom-data) that stores additional information
@@ -2533,7 +2537,11 @@ export type Metafield = {
   value: Scalars['String']['output'];
 };
 
-/** A precise monetary value and its associated currency. For example, 12.99 USD. */
+/**
+ * A precise monetary value and its associated currency. Combines a decimal amount
+ * with a three-letter currency code to express prices, costs, and other financial
+ * values throughout the API. For example, 12.99 USD.
+ */
 export type MoneyV2 = {
   __typename?: 'MoneyV2';
   /**
@@ -2802,7 +2810,11 @@ export type ProductMetafieldArgs = {
 
 /** The target and value of the discount to be applied to a cart line. */
 export type ProductDiscountCandidate = {
-  /** The discount code associated with this discount candidate, for code-based discounts. */
+  /**
+   * An optional discount code associated with this discount candidate, for use
+   * with automatic discounts. If a code discount is the function trigger, the
+   * associated discount code will be overwritten by the triggering discount code.
+   */
   associatedDiscountCode?: InputMaybe<AssociatedDiscountCode>;
   /**
    * A notification on the **Cart** page informs customers about available
@@ -3077,4 +3089,4 @@ export type DeliveryInput = { __typename?: 'Input', cart: { __typename?: 'Cart',
 export type CartInputVariables = Exact<{ [key: string]: never; }>;
 
 
-export type CartInput = { __typename?: 'Input', cart: { __typename?: 'Cart', lines: Array<{ __typename?: 'CartLine', id: string, cost: { __typename?: 'CartLineCost', subtotalAmount: { __typename?: 'MoneyV2', amount: any } } }> }, discount: { __typename?: 'Discount', discountClasses: Array<DiscountClass> } };
+export type CartInput = { __typename?: 'Input', cart: { __typename?: 'Cart', lines: Array<{ __typename?: 'CartLine', id: string, quantity: number, merchandise: { __typename: 'CustomProduct' } | { __typename: 'ProductVariant', id: string } }> }, discount: { __typename?: 'Discount', discountClasses: Array<DiscountClass> }, fetchResult?: { __typename?: 'HttpResponse', jsonBody?: any | null } | null };
